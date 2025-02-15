@@ -230,8 +230,10 @@ class Agent(embodied.jax.Agent):
       inp = self.feat2tensor(feat)
       los, reploss_out, mets = repl_loss(
           last, term, rew, boot,
+          self.rew(inp, 2).entropy(),
           self.val(inp, 2),
           self.slowval(inp, 2),
+          self.tau,
           self.valnorm,
           update=training,
           horizon=self.config.horizon,
@@ -457,8 +459,8 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rew, boot,
-    value, slowvalue, valnorm,
+    last, term, rew, boot, rent,
+    value, slowvalue, tau, valnorm,
     update=True,
     slowreg=1.0,
     slowtar=True,
@@ -473,6 +475,9 @@ def repl_loss(
   tarval = slowval if slowtar else val
   disc = 1 - 1 / horizon
   weight = f32(~last)
+
+  rew = rew + rent / 2 * tau
+
   ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
 
   voffset, vscale = valnorm(ret, update)
