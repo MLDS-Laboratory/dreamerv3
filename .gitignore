@@ -3,6 +3,7 @@
 dist
 __pycache__/
 *.py[cod]
+*.ipynb
 *.egg-info
 MUJOCO_LOG.TXT
 logdir

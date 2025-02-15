@@ -282,6 +282,30 @@ class TwoHot(Output):
     self.squash = squash or (lambda x: x)
     self.unsquash = unsquash or (lambda x: x)
 
+  def var(self):
+    n = self.logits.shape[-1]
+    if n % 2 == 1:
+      m = (n - 1) // 2
+      p1 = self.probs[..., :m]
+      p2 = self.probs[..., m: m + 1]
+      p3 = self.probs[..., m + 1:]
+      b1 = self.bins[..., :m]
+      b2 = self.bins[..., m: m + 1]
+      b3 = self.bins[..., m + 1:]
+      wavg = (p2 * b2).sum(-1) + ((p1 * b1)[..., ::-1] + (p3 * b3)).sum(-1)
+      wavg_sq = (p2 * (b2 ** 2)).sum(-1) + ((p1 * (b1 ** 2))[..., ::-1] + (p3 * (b3 ** 2))).sum(-1)
+      wvar = wavg_sq - wavg ** 2
+      return self.unsquash(wvar)
+    else:
+      p1 = self.probs[..., :n // 2]
+      p2 = self.probs[..., n // 2:]
+      b1 = self.bins[..., :n // 2]
+      b2 = self.bins[..., n // 2:]
+      wavg = ((p1 * b1)[..., ::-1] + (p2 * b2)).sum(-1)
+      wavg_sq = (p2 * (b2 ** 2)).sum(-1) + ((p1 * (b1 ** 2))[..., ::-1] + (p3 * (b3 ** 2))).sum(-1)
+      wvar = wavg_sq - wavg ** 2
+      return self.unsquash(wvar)
+
   def pred(self):
     # The naive implementation results in a non-zero result even if the bins
     # are symmetric and the probabilities uniform, because the sum operation

@@ -67,14 +67,15 @@ class Agent(embodied.jax.Agent):
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
 
-    self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
+    # self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
+    self.tau = 1.0
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -205,10 +206,12 @@ class Agent(embodied.jax.Agent):
     los, imgloss_out, mets = imag_loss(
         imgact,
         self.rew(inp, 2).pred(),
+        self.rew(inp, 2).var(),
         self.con(inp, 2).prob(1),
         self.pol(inp, 2),
         self.val(inp, 2),
         self.slowval(inp, 2),
+        self.tau,
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -382,8 +385,8 @@ class Agent(embodied.jax.Agent):
 
 
 def imag_loss(
-    act, rew, con,
-    policy, value, slowvalue,
+    act, rmean, rvar, con,
+    policy, value, slowvalue, tau,
     retnorm, valnorm, advnorm,
     update,
     contdisc=True,
@@ -404,6 +407,9 @@ def imag_loss(
   weight = jnp.cumprod(disc * con, 1) / disc
   last = jnp.zeros_like(con)
   term = 1 - con
+
+  rew = rmean + rvar / (2 * tau)
+
   ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
 
   roffset, rscale = retnorm(ret, update)
@@ -413,7 +419,7 @@ def imag_loss(
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
-      logpi * sg(adv_normed) + actent * sum(ents.values()))
+      logpi * sg(adv_normed) + actent * tau * sum(ents.values()))
   losses['policy'] = policy_loss
 
   voffset, vscale = valnorm(ret, update)
@@ -427,6 +433,8 @@ def imag_loss(
   metrics['adv'] = adv.mean()
   metrics['adv_std'] = adv.std()
   metrics['adv_mag'] = jnp.abs(adv).mean()
+  metrics['rmean'] = rmean.mean()
+  metrics['rvar'] = rvar.mean()
   metrics['rew'] = rew.mean()
   metrics['con'] = con.mean()
   metrics['ret'] = ret_normed.mean()
