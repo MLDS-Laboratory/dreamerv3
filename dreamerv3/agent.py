@@ -206,7 +206,7 @@ class Agent(embodied.jax.Agent):
     los, imgloss_out, mets = imag_loss(
         imgact,
         self.rew(inp, 2).pred(),
-        self.rew(inp, 2).var(),
+        self.rew(inp, 2).entropy(),
         self.con(inp, 2).prob(1),
         self.pol(inp, 2),
         self.val(inp, 2),
@@ -385,7 +385,7 @@ class Agent(embodied.jax.Agent):
 
 
 def imag_loss(
-    act, rmean, rvar, con,
+    act, rmean, rent, con,
     policy, value, slowvalue, tau,
     retnorm, valnorm, advnorm,
     update,
@@ -408,7 +408,7 @@ def imag_loss(
   last = jnp.zeros_like(con)
   term = 1 - con
 
-  rew = rmean + rvar / (2 * tau)
+  rew = rmean + rent / (2 * tau)
 
   ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
 
@@ -434,7 +434,7 @@ def imag_loss(
   metrics['adv_std'] = adv.std()
   metrics['adv_mag'] = jnp.abs(adv).mean()
   metrics['rmean'] = rmean.mean()
-  metrics['rvar'] = rvar.mean()
+  metrics['rent'] = rent.mean()
   metrics['rew'] = rew.mean()
   metrics['con'] = con.mean()
   metrics['ret'] = ret_normed.mean()
