@@ -67,15 +67,14 @@ class Agent(embodied.jax.Agent):
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
 
-    # self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
-    self.tau = 1.0
+    self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -211,7 +210,7 @@ class Agent(embodied.jax.Agent):
         self.pol(inp, 2),
         self.val(inp, 2),
         self.slowval(inp, 2),
-        self.tau,
+        self.tau.read(),
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -233,7 +232,7 @@ class Agent(embodied.jax.Agent):
           self.rew(inp, 2).entropy(),
           self.val(inp, 2),
           self.slowval(inp, 2),
-          self.tau,
+          self.tau.read(),
           self.valnorm,
           update=training,
           horizon=self.config.horizon,
@@ -421,8 +420,12 @@ def imag_loss(
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
-      logpi * sg(adv_normed) + actent * tau * sum(ents.values()))
+      logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
+  
+  tau_loss = sg(weight[:, :-1]) * (sg(logpi) * adv_normed + actent * tau * sg(sum(ents.values())))
+
   losses['policy'] = policy_loss
+  losses['tau'] = tau_loss
 
   voffset, vscale = valnorm(ret, update)
   tar_normed = (ret - voffset) / vscale
