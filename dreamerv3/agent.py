@@ -69,7 +69,6 @@ class Agent(embodied.jax.Agent):
 
     self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
 
-
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
@@ -414,7 +413,6 @@ def imag_loss(
 
   rew = rmean + rvar / (2 * tau)
   ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
-
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
   aoffset, ascale = advnorm(adv, update)
@@ -423,8 +421,16 @@ def imag_loss(
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
       logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
+
+  rew = sg(rmean) + sg(rvar) / (2 * tau)
+  ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(tarval), sg(disc), sg(lam))
+  adv = (ret - sg(tarval[:, :-1])) / rscale
+  adv_normed = (adv - aoffset) / ascale
   tau_loss = sg(weight[:, :-1]) * (
-      actent * tau * sg(sum(ents.values())) - sg(rvar[:, :-1]) / (2 * tau))
+      sg(logpi) * adv_normed + actent * tau * sg(sum(ents.values())))
+    
+  # tau_loss = sg(weight[:, :-1]) * (
+  #     actent * tau * sg(sum(ents.values())) + sg(rvar[:, :-1]) / (2 * tau))
 
   losses['policy'] = policy_loss
   losses['tau'] = tau_loss

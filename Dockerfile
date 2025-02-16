@@ -57,8 +57,7 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_API_KEY=${WANDB_API_KEY}
-ENV WANDB_PROJECT=${WANDB_PROJECT}
+ENV WANDB_PROJECT=k-dreamer
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -73,7 +72,7 @@ ENV WANDB_PROJECT=${WANDB_PROJECT}
 # CartPole
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "./logdir/rs/gym_CartPole-v1", \
+            "--logdir", "./logdir/gym_CartPole-v1", \
             "--configs", "gym", \ 
             "--task", "gym_CartPole-v1", \
             "--logger.outputs", "wandb"]
