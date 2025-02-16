@@ -66,13 +66,15 @@ class Agent(embodied.jax.Agent):
     self.slowval = embodied.jax.SlowModel(
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
+    
+    self.beta = nj.Variable(jnp.array, 1.0, f32, name='beta')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.beta]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -207,6 +209,7 @@ class Agent(embodied.jax.Agent):
         self.pol(inp, 2),
         self.val(inp, 2),
         self.slowval(inp, 2),
+        self.beta.read(),
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -227,6 +230,7 @@ class Agent(embodied.jax.Agent):
           last, term, rew, boot,
           self.val(inp, 2),
           self.slowval(inp, 2),
+          self.beta.read(),
           self.valnorm,
           update=training,
           horizon=self.config.horizon,
@@ -381,7 +385,7 @@ class Agent(embodied.jax.Agent):
 
 def imag_loss(
     act, rew, con,
-    policy, value, slowvalue,
+    policy, value, slowvalue, beta,
     retnorm, valnorm, advnorm,
     update,
     contdisc=True,
@@ -402,8 +406,8 @@ def imag_loss(
   weight = jnp.cumprod(disc * con, 1) / disc
   last = jnp.zeros_like(con)
   term = 1 - con
-  ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
 
+  ret = lambda_return(last, term, rew, tarval, tarval, disc, lam, sg(beta))
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
   aoffset, ascale = advnorm(adv, update)
@@ -411,8 +415,16 @@ def imag_loss(
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
-      logpi * sg(adv_normed) + actent * sum(ents.values()))
+      logpi * sg(adv_normed) + actent * sg(beta) * sum(ents.values()))
   losses['policy'] = policy_loss
+
+  ret = lambda_return(sg(last), sg(term), sg(rew), sg(tarval), sg(tarval), sg(disc), sg(lam), beta)
+  adv = (ret - sg(tarval[:, :-1])) / rscale
+  aoffset, ascale = advnorm(adv, update)
+  adv_normed = (adv - aoffset) / ascale
+  beta_loss = sg(weight[:, :-1]) * (
+      sg(logpi) * adv_normed + actent * beta * sg(sum(ents.values())))
+  losses['beta'] = beta_loss
 
   voffset, vscale = valnorm(ret, update)
   tar_normed = (ret - voffset) / vscale
@@ -448,7 +460,7 @@ def imag_loss(
 
 def repl_loss(
     last, term, rew, boot,
-    value, slowvalue, valnorm,
+    value, slowvalue, beta, valnorm,
     update=True,
     slowreg=1.0,
     slowtar=True,
@@ -463,7 +475,7 @@ def repl_loss(
   tarval = slowval if slowtar else val
   disc = 1 - 1 / horizon
   weight = f32(~last)
-  ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
+  ret = lambda_return(last, term, rew, tarval, boot, disc, lam, beta)
 
   voffset, vscale = valnorm(ret, update)
   ret_normed = (ret - voffset) / vscale
@@ -479,12 +491,12 @@ def repl_loss(
   return losses, outs, metrics
 
 
-def lambda_return(last, term, rew, val, boot, disc, lam):
+def lambda_return(last, term, rew, val, boot, disc, lam, beta):
   chex.assert_equal_shape((last, term, rew, val, boot))
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
-  cont = (1 - f32(last))[:, 1:] * lam
-  interm = rew[:, 1:] + (1 - cont) * live * boot[:, 1:]
   for t in reversed(range(live.shape[1])):
-    rets.append(interm[:, t] + live[:, t] * cont[:, t] * rets[-1])
-  return jnp.stack(list(reversed(rets))[:-1], 1)
+    rets.append(jnp.exp(beta * rew[:, t] + live[:, t] * jnp.log(1e-15 + jax.nn.relu(rets[-1]))))
+  rets = jnp.stack(list(reversed(rets)), 1)
+  rets = jnp.exp(beta * rew[:, 1:] + live * ((1 - lam) * jnp.log(1e-15 + jax.nn.relu(boot[:, 1:])) + lam * jnp.log(1e-15 + jax.nn.relu(rets[:, 1:]))))
+  return rets
