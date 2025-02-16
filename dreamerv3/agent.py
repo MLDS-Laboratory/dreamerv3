@@ -414,6 +414,16 @@ def imag_loss(
       logpi * sg(adv_normed) + actent * sum(ents.values()))
   losses['policy'] = policy_loss
 
+<<<<<<< HEAD
+=======
+  ret = lambda_return(sg(last), sg(term), sg(rew), sg(tarval), sg(tarval), sg(disc), sg(lam), beta)
+  adv = (ret - sg(tarval[:, :-1])) / rscale
+  adv_normed = (adv - aoffset) / ascale
+  beta_loss = sg(weight[:, :-1]) * (
+      sg(logpi) * adv_normed + actent * beta * sg(sum(ents.values())))
+  losses['beta'] = beta_loss
+
+>>>>>>> 83a6c93 (Update)
   voffset, vscale = valnorm(ret, update)
   tar_normed = (ret - voffset) / vscale
   tar_padded = jnp.concatenate([tar_normed, 0 * tar_normed[:, -1:]], 1)
@@ -435,6 +445,8 @@ def imag_loss(
   metrics['ret_min'] = ret_normed.min()
   metrics['ret_max'] = ret_normed.max()
   metrics['ret_rate'] = (jnp.abs(ret_normed) >= 1.0).mean()
+  metrics['beta'] = beta
+  
   for k in act:
     metrics[f'ent/{k}'] = ents[k].mean()
     if hasattr(policy[k], 'minent'):
@@ -481,6 +493,7 @@ def repl_loss(
 
 def lambda_return(last, term, rew, val, boot, disc, lam):
   chex.assert_equal_shape((last, term, rew, val, boot))
+  # jax.debug.print('{}', beta)
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
   cont = (1 - f32(last))[:, 1:] * lam

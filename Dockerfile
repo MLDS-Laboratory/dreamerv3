@@ -73,6 +73,7 @@ ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
             "--logdir", "dreamer/gym_Acrobot-v1", \
             "--configs", "gym", \ 
+<<<<<<< HEAD
             "--task", "gym_Acrobot-v1", \
             "--logger.outputs", "wandb"]
 
@@ -83,6 +84,11 @@ ENTRYPOINT ["python", \
 #             "--configs", "gym", \ 
 #             "--task", "gym_CartPole-v1", \
 #             "--logger.outputs", "wandb"]
+=======
+            "--task", "gym_CartPole-v1", \
+            "--logger.outputs", "wandb", \
+            "--jax.platform", "cpu"]
+>>>>>>> 83a6c93 (Update)
 
 # # CartPole DMC
 # ENTRYPOINT ["python", \
