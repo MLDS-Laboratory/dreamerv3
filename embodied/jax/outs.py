@@ -167,6 +167,9 @@ class Normal(Output):
   def pred(self):
     return self.mean
 
+  def var(self):
+    return self.stddev ** 2
+
   def sample(self, seed, shape=()):
     sample = jax.random.normal(seed, shape + self.mean.shape, f32)
     return sample * self.stddev + self.mean

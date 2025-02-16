@@ -69,6 +69,7 @@ class Agent(embodied.jax.Agent):
 
     self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
 
+
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
@@ -142,6 +143,8 @@ class Agent(embodied.jax.Agent):
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
     self.slowval.update()
+    self.tau.write(jnp.clip(self.tau.read(), 1e-6, 1000))
+
     outs = {}
     if self.config.replay_context:
       updates = elements.tree.flatdict(dict(
@@ -205,7 +208,7 @@ class Agent(embodied.jax.Agent):
     los, imgloss_out, mets = imag_loss(
         imgact,
         self.rew(inp, 2).pred(),
-        self.rew(inp, 2).entropy(),
+        self.rew(inp, 2).var(),
         self.con(inp, 2).prob(1),
         self.pol(inp, 2),
         self.val(inp, 2),
@@ -229,7 +232,7 @@ class Agent(embodied.jax.Agent):
       inp = self.feat2tensor(feat)
       los, reploss_out, mets = repl_loss(
           last, term, rew, boot,
-          self.rew(inp, 2).entropy(),
+          self.rew(inp, 2).var(),
           self.val(inp, 2),
           self.slowval(inp, 2),
           self.tau.read(),
@@ -386,7 +389,7 @@ class Agent(embodied.jax.Agent):
 
 
 def imag_loss(
-    act, rmean, rent, con,
+    act, rmean, rvar, con,
     policy, value, slowvalue, tau,
     retnorm, valnorm, advnorm,
     update,
@@ -409,8 +412,7 @@ def imag_loss(
   last = jnp.zeros_like(con)
   term = 1 - con
 
-  rew = rmean + rent / (2 * tau)
-
+  rew = rmean + rvar / (2 * tau)
   ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
 
   roffset, rscale = retnorm(ret, update)
@@ -421,8 +423,8 @@ def imag_loss(
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
       logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
-  
-  tau_loss = sg(weight[:, :-1]) * (sg(logpi) * adv_normed + actent * tau * sg(sum(ents.values())))
+  tau_loss = sg(weight[:, :-1]) * (
+      actent * tau * sg(sum(ents.values())) - sg(rvar[:, :-1]) / (2 * tau))
 
   losses['policy'] = policy_loss
   losses['tau'] = tau_loss
@@ -439,7 +441,7 @@ def imag_loss(
   metrics['adv_std'] = adv.std()
   metrics['adv_mag'] = jnp.abs(adv).mean()
   metrics['rmean'] = rmean.mean()
-  metrics['rent'] = rent.mean()
+  metrics['rvar'] = rvar.mean()
   metrics['rew'] = rew.mean()
   metrics['con'] = con.mean()
   metrics['ret'] = ret_normed.mean()
@@ -450,6 +452,8 @@ def imag_loss(
   metrics['ret_min'] = ret_normed.min()
   metrics['ret_max'] = ret_normed.max()
   metrics['ret_rate'] = (jnp.abs(ret_normed) >= 1.0).mean()
+  metrics['tau'] = tau
+
   for k in act:
     metrics[f'ent/{k}'] = ents[k].mean()
     if hasattr(policy[k], 'minent'):
@@ -462,7 +466,7 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rew, boot, rent,
+    last, term, rew, boot, rvar,
     value, slowvalue, tau, valnorm,
     update=True,
     slowreg=1.0,
@@ -479,7 +483,7 @@ def repl_loss(
   disc = 1 - 1 / horizon
   weight = f32(~last)
 
-  rew = rew + rent / 2 * tau
+  rew = rew + rvar / (2 * tau)
 
   ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
 
