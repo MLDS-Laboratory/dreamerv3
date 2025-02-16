@@ -421,6 +421,14 @@ def imag_loss(
       logpi * sg(adv_normed) + actent * sum(ents.values()))
   losses['policy'] = policy_loss
 
+  ret = lambda_return(sg(last), sg(term), sg(rew), sg(tarval), sg(tarval), sg(disc), sg(lam), beta)
+  adv = (ret - sg(tarval[:, :-1])) / rscale
+  aoffset, ascale = advnorm(adv, update)
+  adv_normed = (adv - aoffset) / ascale
+  beta_loss = sg(weight[:, :-1]) * (
+      sg(logpi) * adv_normed + actent * beta * sg(sum(ents.values())))
+  losses['beta'] = beta_loss * 0
+
   voffset, vscale = valnorm(ret, update)
   tar_normed = (ret - voffset) / vscale
   tar_padded = jnp.concatenate([tar_normed, 0 * tar_normed[:, -1:]], 1)

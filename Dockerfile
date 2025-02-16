@@ -74,8 +74,7 @@ ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
             "--logdir", "./logdir/gym_CartPole-v1", \
             "--configs", "gym", \ 
-            "--task", "gym_CartPole-v1", \
-            "--logger.outputs", "wandb"]
+            "--task", "gym_CartPole-v1"]
 
 # # CartPole DMC
 # ENTRYPOINT ["python", \
