@@ -86,8 +86,10 @@ ENTRYPOINT ["python", \
 #             "--logger.outputs", "wandb"]
 =======
             "--task", "gym_CartPole-v1", \
-            "--logger.outputs", "wandb", \
-            "--jax.platform", "cpu"]
+            "--logger.outputs", "wandb"]
+            # "--jax.platform", "cpu"]
+
+
 >>>>>>> 83a6c93 (Update)
 
 # # CartPole DMC
