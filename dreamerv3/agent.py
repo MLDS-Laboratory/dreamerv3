@@ -423,11 +423,10 @@ def imag_loss(
       logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
 
   rew = sg(rmean) + sg(rvar) / (2 * tau)
-  ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(tarval), sg(disc), sg(lam))
+  ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(tarval), disc, lam)
   adv = (ret - sg(tarval[:, :-1])) / rscale
   adv_normed = (adv - aoffset) / ascale
-  tau_loss = sg(weight[:, :-1]) * (
-      sg(logpi) * adv_normed + actent * tau * sg(sum(ents.values())))
+  tau_loss = sg(weight[:, :-1]) * (adv_normed + actent * tau * sg(sum(ents.values())))
     
   # tau_loss = sg(weight[:, :-1]) * (
   #     actent * tau * sg(sum(ents.values())) + sg(rvar[:, :-1]) / (2 * tau))
