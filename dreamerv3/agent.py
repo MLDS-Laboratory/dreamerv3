@@ -424,8 +424,7 @@ def imag_loss(
   ret = lambda_return(sg(last), sg(term), sg(rew), sg(tarval), sg(tarval), sg(disc), sg(lam), beta)
   adv = (ret - sg(tarval[:, :-1])) / rscale
   adv_normed = (adv - aoffset) / ascale
-  beta_loss = sg(weight[:, :-1]) * (
-      sg(logpi) * adv_normed + actent * beta * sg(sum(ents.values())))
+  beta_loss = sg(weight[:, :-1]) * (adv_normed + actent * beta * sg(sum(ents.values())))
   losses['beta'] = beta_loss
 
   voffset, vscale = valnorm(ret, update)
