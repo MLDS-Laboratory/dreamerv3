@@ -68,13 +68,14 @@ class Agent(embodied.jax.Agent):
         source=self.val, **config.slowvalue)
 
     self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
+    self.beta = nj.Variable(jnp.array, 1.0, f32, name='beta')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau, self.beta]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -213,6 +214,7 @@ class Agent(embodied.jax.Agent):
         self.val(inp, 2),
         self.slowval(inp, 2),
         self.tau.read(),
+        self.beta.read(),
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -234,8 +236,11 @@ class Agent(embodied.jax.Agent):
           self.rew(inp, 2).var(),
           self.val(inp, 2),
           self.slowval(inp, 2),
+          losses['dyn'],
           self.tau.read(),
+          self.beta.read(),
           self.valnorm,
+          self.srpnorm,
           update=training,
           horizon=self.config.horizon,
           **self.config.repl_loss)
@@ -411,7 +416,7 @@ def imag_loss(
   last = jnp.zeros_like(con)
   term = 1 - con
 
-  rew = rmean + rvar / (2 * tau)
+  rew = rmean + rvar / (2 * tau) - rvar / (2 * beta)
   ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
@@ -422,7 +427,7 @@ def imag_loss(
   policy_loss = sg(weight[:, :-1]) * -(
       logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
 
-  rew = sg(rmean) + sg(rvar) / (2 * tau)
+  rew = sg(rmean) + sg(rvar) / (2 * tau) - sg(rvar) / (2 * sg(beta)) 
   ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(tarval), disc, lam)
   adv = (ret - sg(tarval[:, :-1])) / rscale
   adv_normed = (adv - aoffset) / ascale
@@ -469,7 +474,7 @@ def imag_loss(
 
 def repl_loss(
     last, term, rew, boot, rvar,
-    value, slowvalue, tau, valnorm,
+    value, slowvalue, tau, beta, valnorm,
     update=True,
     slowreg=1.0,
     slowtar=True,
@@ -485,7 +490,7 @@ def repl_loss(
   disc = 1 - 1 / horizon
   weight = f32(~last)
 
-  rew = rew + rvar / (2 * tau)
+  rew = rew + rvar / (2 * tau) - rvar / (2 * beta)
 
   ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
 
