@@ -427,9 +427,6 @@ def imag_loss(
   adv = (ret - sg(tarval[:, :-1])) / rscale
   adv_normed = (adv - aoffset) / ascale
   tau_loss = sg(weight[:, :-1]) * (adv_normed + actent * tau * sg(sum(ents.values())))
-    
-  # tau_loss = sg(weight[:, :-1]) * (
-  #     actent * tau * sg(sum(ents.values())) + sg(rvar[:, :-1]) / (2 * tau))
 
   losses['policy'] = policy_loss
   losses['tau'] = tau_loss

@@ -158,5 +158,5 @@ class Head(nj.Module):
     assert not self.space.discrete
     mean = self.sub('mean', nets.Linear, self.space.shape, **self.kw)(x)
     stddev = self.sub('stddev', nets.Linear, self.space.shape, **self.kw)(x)
-    output = outs.Normal(mean, jnp.exp(stddev))
+    output = outs.Normal(mean, jnp.clip(jnp.exp(stddev), min=1e-3))
     return output
