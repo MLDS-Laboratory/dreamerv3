@@ -73,6 +73,7 @@ class Agent(embodied.jax.Agent):
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
+    self.srpnorm = embodied.jax.Normalize(**config.srpnorm, name='srpnorm')
 
     self.modules = [
         self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau, self.beta]
@@ -144,6 +145,7 @@ class Agent(embodied.jax.Agent):
     metrics.update(mets)
     self.slowval.update()
     self.tau.write(jnp.clip(self.tau.read(), 1e-6, 1000))
+    self.beta.write(jnp.clip(self.beta.read(), 1e-6, 1000))
 
     outs = {}
     if self.config.replay_context:
@@ -394,7 +396,7 @@ class Agent(embodied.jax.Agent):
 
 def imag_loss(
     act, rmean, rvar, con,
-    policy, value, slowvalue, tau,
+    policy, value, slowvalue, tau, beta,
     retnorm, valnorm, advnorm,
     update,
     contdisc=True,
@@ -473,13 +475,16 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rew, boot, rvar,
-    value, slowvalue, tau, beta, valnorm,
+    last, term, rmean, boot, rvar,
+    value, slowvalue, srp, 
+    tau, beta, 
+    valnorm, srpnorm,
     update=True,
     slowreg=1.0,
+    actsrp=3e-4,
     slowtar=True,
     horizon=333,
-    lam=0.95,
+    lam=0.95
 ):
   losses = {}
 
@@ -490,8 +495,7 @@ def repl_loss(
   disc = 1 - 1 / horizon
   weight = f32(~last)
 
-  rew = rew + rvar / (2 * tau) - rvar / (2 * beta)
-
+  rew = rmean + rvar / (2 * tau) - rvar / (2 * beta)
   ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
 
   voffset, vscale = valnorm(ret, update)
@@ -501,9 +505,23 @@ def repl_loss(
       value.loss(sg(ret_padded)) +
       slowreg * value.loss(sg(slowvalue.pred())))[:, :-1]
 
+  rew = sg(rmean) + sg(rvar) / (2 * sg(tau)) - sg(rvar) / (2 * beta) 
+  ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(boot), disc, lam)
+  ret_normed = (ret - voffset) / vscale
+  ret_padded = jnp.concatenate([ret_normed, 0 * ret_normed[:, -1:]], 1)
+  
+  soffset, sscale = srpnorm(srp, update)
+  srp_normed = (srp - soffset) / sscale
+  losses['beta'] = weight[:, :-1] * (ret_normed - actsrp * beta * sg(srp_normed[:, :-1]))
+
   outs = {}
   outs['ret'] = ret
+  
   metrics = {}
+  metrics['beta'] = beta
+  metrics['srp'] = srp_normed.mean()
+  metrics['srp_min'] = srp_normed.min()
+  metrics['srp_max'] = srp_normed.max()
 
   return losses, outs, metrics
 
