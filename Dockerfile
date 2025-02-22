@@ -72,9 +72,9 @@ ENV WANDB_PROJECT=k-dreamer
 # CartPole
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "./logdir/gym_Acrobot-v1", \
+            "--logdir", "k-dreamer/gym_CartPole-v1", \
             "--configs", "gym", \ 
-            "--task", "gym_Acrobot-v1", \
+            "--task", "gym_CartPole-v1", \
             "--logger.outputs", "wandb"]
 
 # # CartPole DMC

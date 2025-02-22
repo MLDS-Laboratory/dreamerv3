@@ -232,6 +232,7 @@ class Agent(embodied.jax.Agent):
       los, reploss_out, mets = repl_loss(
           last, term, rew, boot,
           self.rew(inp, 2).var(),
+          self.pol(inp, 2),
           self.val(inp, 2),
           self.slowval(inp, 2),
           self.tau.read(),
@@ -411,28 +412,24 @@ def imag_loss(
   last = jnp.zeros_like(con)
   term = 1 - con
 
-  rew = rmean + rvar / (2 * tau)
-  ret = lambda_return(last, term, rew, tarval, tarval, disc, lam)
+  logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
+  ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
+  ret = lambda_return(last, term, rmean, rvar, tarval, tarval, sum(ents.values()), tau, disc, lam)
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
   aoffset, ascale = advnorm(adv, update)
   adv_normed = (adv - aoffset) / ascale
-  logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
-  ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
+  
   policy_loss = sg(weight[:, :-1]) * -(
       logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
-
-  rew = sg(rmean) + sg(rvar) / (2 * tau)
-  ret = lambda_return(sg(last), sg(term), rew, sg(tarval), sg(tarval), disc, lam)
-  adv = (ret - sg(tarval[:, :-1])) / rscale
-  adv_normed = (adv - aoffset) / ascale
-  tau_loss = sg(weight[:, :-1]) * (adv_normed + actent * tau * sg(sum(ents.values())))
+  tau_loss = sg(weight[:, :-1]) * (sg(rvar[:, :-1]) / (2 * tau) + actent * tau * sg(sum(ents.values())))
 
   losses['policy'] = policy_loss
   losses['tau'] = tau_loss
 
-  voffset, vscale = valnorm(ret, update)
-  tar_normed = (ret - voffset) / vscale
+  tar = ret + tau * sum(ents.values())
+  voffset, vscale = valnorm(tar, update)
+  tar_normed = (tar - voffset) / vscale
   tar_padded = jnp.concatenate([tar_normed, 0 * tar_normed[:, -1:]], 1)
   losses['value'] = sg(weight[:, :-1]) * (
       value.loss(sg(tar_padded)) +
@@ -444,7 +441,7 @@ def imag_loss(
   metrics['adv_mag'] = jnp.abs(adv).mean()
   metrics['rmean'] = rmean.mean()
   metrics['rvar'] = rvar.mean()
-  metrics['rew'] = rew.mean()
+  metrics['rew'] = (rmean + rvar / (2 * tau)).mean()
   metrics['con'] = con.mean()
   metrics['ret'] = ret_normed.mean()
   metrics['val'] = val.mean()
@@ -468,8 +465,8 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rew, boot, rvar,
-    value, slowvalue, tau, valnorm,
+    last, term, rmean, boot, rvar,
+    policy, value, slowvalue, tau, valnorm,
     update=True,
     slowreg=1.0,
     slowtar=True,
@@ -485,10 +482,10 @@ def repl_loss(
   disc = 1 - 1 / horizon
   weight = f32(~last)
 
-  rew = rew + rvar / (2 * tau)
-
-  ret = lambda_return(last, term, rew, tarval, boot, disc, lam)
-
+  ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
+  ret = lambda_return(last, term, rmean, rvar, tarval, boot, sum(ents.values()), tau, disc, lam)
+  
+  ret = ret + tau * sum(ents.values())
   voffset, vscale = valnorm(ret, update)
   ret_normed = (ret - voffset) / vscale
   ret_padded = jnp.concatenate([ret_normed, 0 * ret_normed[:, -1:]], 1)
@@ -503,12 +500,12 @@ def repl_loss(
   return losses, outs, metrics
 
 
-def lambda_return(last, term, rew, val, boot, disc, lam):
-  chex.assert_equal_shape((last, term, rew, val, boot))
+def lambda_return(last, term, rmean, rvar, val, boot, ents, tau, disc, lam):
+  chex.assert_equal_shape((last, term, rmean, rvar, val, boot))
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
   cont = (1 - f32(last))[:, 1:] * lam
-  interm = rew[:, 1:] + (1 - cont) * live * boot[:, 1:]
+  interm = rmean[:, 1:] + rvar[:, 1:] / (2 * tau) + (1 - cont) * live * boot[:, 1:]
   for t in reversed(range(live.shape[1])):
-    rets.append(interm[:, t] + live[:, t] * cont[:, t] * rets[-1])
+    rets.append(interm[:, t] + live[:, t] * cont[:, t] * (rets[-1] + tau * ents[:, t]))
   return jnp.stack(list(reversed(rets))[:-1], 1)
