@@ -68,13 +68,14 @@ class Agent(embodied.jax.Agent):
         source=self.val, **config.slowvalue)
 
     self.tau = nj.Variable(jnp.array, 1.0, f32, name='tau')
+    self.beta = nj.Variable(jnp.array, 1.0, f32, name='beta')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
     self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val, self.tau, self.beta]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -143,6 +144,7 @@ class Agent(embodied.jax.Agent):
     metrics.update(mets)
     self.slowval.update()
     self.tau.write(jnp.clip(self.tau.read(), 1e-6, 1000))
+    self.beta.write(jnp.clip(self.beta.read(), 1e-6, 1000))
 
     outs = {}
     if self.config.replay_context:
@@ -213,6 +215,7 @@ class Agent(embodied.jax.Agent):
         self.val(inp, 2),
         self.slowval(inp, 2),
         self.tau.read(),
+        self.beta.read(),
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -223,6 +226,7 @@ class Agent(embodied.jax.Agent):
 
     # Replay
     if self.config.repval_loss:
+      surprise = losses['dyn']
       feat = sg(repfeat, skip=self.config.repval_grad)
       last, term, rew = [obs[k] for k in ('is_last', 'is_terminal', 'reward')]
       boot = imgloss_out['ret'][:, 0].reshape(B, K)
@@ -230,12 +234,13 @@ class Agent(embodied.jax.Agent):
           lambda x: x[:, -K:], (feat, last, term, rew, boot))
       inp = self.feat2tensor(feat)
       los, reploss_out, mets = repl_loss(
-          last, term, rew, boot,
+          last, term, rew, boot, surprise,
           self.rew(inp, 2).var(),
           self.pol(inp, 2),
           self.val(inp, 2),
           self.slowval(inp, 2),
           self.tau.read(),
+          self.beta.read(),
           self.valnorm,
           update=training,
           horizon=self.config.horizon,
@@ -390,7 +395,8 @@ class Agent(embodied.jax.Agent):
 
 def imag_loss(
     act, rmean, rvar, con,
-    policy, value, slowvalue, tau,
+    policy, value, slowvalue, 
+    tau, beta,
     retnorm, valnorm, advnorm,
     update,
     contdisc=True,
@@ -414,7 +420,7 @@ def imag_loss(
 
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
-  ret = lambda_return(last, term, rmean, rvar, tarval, tarval, sum(ents.values()), tau, disc, lam)
+  ret = lambda_return(last, term, rmean, rvar, tarval, tarval, sum(ents.values()), tau, beta, disc, lam)
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
   aoffset, ascale = advnorm(adv, update)
@@ -441,7 +447,7 @@ def imag_loss(
   metrics['adv_mag'] = jnp.abs(adv).mean()
   metrics['rmean'] = rmean.mean()
   metrics['rvar'] = rvar.mean()
-  metrics['rew'] = (rmean + rvar / (2 * tau)).mean()
+  metrics['rew'] = (rmean + rvar / (2 * tau) - rvar / (2 * beta)).mean()
   metrics['con'] = con.mean()
   metrics['ret'] = ret_normed.mean()
   metrics['val'] = val.mean()
@@ -452,6 +458,8 @@ def imag_loss(
   metrics['ret_max'] = ret_normed.max()
   metrics['ret_rate'] = (jnp.abs(ret_normed) >= 1.0).mean()
   metrics['tau'] = tau
+
+  jax.debug.print('tau {}', tau)
 
   for k in act:
     metrics[f'ent/{k}'] = ents[k].mean()
@@ -465,13 +473,16 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rmean, boot, rvar,
-    policy, value, slowvalue, tau, valnorm,
+    last, term, rmean, boot, surprise, rvar,
+    policy, value, slowvalue, 
+    tau, beta,
+    valnorm,
     update=True,
+    actsrp=3e-4,
     slowreg=1.0,
     slowtar=True,
     horizon=333,
-    lam=0.95,
+    lam=0.95
 ):
   losses = {}
 
@@ -483,7 +494,7 @@ def repl_loss(
   weight = f32(~last)
 
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
-  ret = lambda_return(last, term, rmean, rvar, tarval, boot, sum(ents.values()), tau, disc, lam)
+  ret = lambda_return(last, term, rmean, rvar, tarval, boot, sum(ents.values()), tau, beta ,disc, lam)
   
   ret = ret + tau * sum(ents.values())
   voffset, vscale = valnorm(ret, update)
@@ -492,20 +503,25 @@ def repl_loss(
   losses['repval'] = weight[:, :-1] * (
       value.loss(sg(ret_padded)) +
       slowreg * value.loss(sg(slowvalue.pred())))[:, :-1]
+  losses['beta'] = sg(weight[:, :-1]) * -(
+      sg(rvar[:, :-1]) / (2 * beta) + actsrp * beta * sg(surprise[:, :-1]))
 
   outs = {}
   outs['ret'] = ret
   metrics = {}
+  metrics['beta'] = beta
+
+  jax.debug.print('beta {}', beta)
 
   return losses, outs, metrics
 
 
-def lambda_return(last, term, rmean, rvar, val, boot, ents, tau, disc, lam):
+def lambda_return(last, term, rmean, rvar, val, boot, ents, tau, beta, disc, lam):
   chex.assert_equal_shape((last, term, rmean, rvar, val, boot))
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
   cont = (1 - f32(last))[:, 1:] * lam
-  interm = rmean[:, 1:] + rvar[:, 1:] / (2 * tau) + (1 - cont) * live * boot[:, 1:]
+  interm = rmean[:, 1:] + rvar[:, 1:] / (2 * tau) - rvar[:, 1:] / (2 * beta) + (1 - cont) * live * boot[:, 1:]
   for t in reversed(range(live.shape[1])):
     rets.append(interm[:, t] + live[:, t] * cont[:, t] * (rets[-1] + tau * ents[:, t]))
   return jnp.stack(list(reversed(rets))[:-1], 1)
