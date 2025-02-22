@@ -72,19 +72,26 @@ ENV WANDB_PROJECT=k-dreamer
 # CartPole
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "k-dreamer/gym_CartPole-v1", \
+            "--logdir", "./logdir/gym_Acrobot-v1", \
             "--configs", "gym", \ 
-            "--task", "gym_CartPole-v1", \
+            "--task", "gym_Acrobot-v1", \
             "--logger.outputs", "wandb"]
 
 # # CartPole DMC
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/dmc_cartpole_balance/BETAN0010", \
-#             "--configs", "dmc_proprio", \ 
-#             "--task", "dmc_cartpole_balance", \
-#             "--agent.risk_beta", "-0.01", \
+#             "--logdir", "k-dreamer/gym_CartPole-v1", \
+#             "--configs", "gym", \ 
+#             "--task", "gym_CartPole-v1", \
 #             "--logger.outputs", "wandb"]
+
+# CartPole DMC
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "k-dreamer/dmc_cartpole_balance", \
+            "--configs", "dmc_proprio", \ 
+            "--task", "dmc_cartpole_balance", \
+            "--logger.outputs", "wandb"]
 
   
 # # Walker
