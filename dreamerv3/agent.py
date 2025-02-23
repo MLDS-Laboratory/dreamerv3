@@ -143,7 +143,7 @@ class Agent(embodied.jax.Agent):
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
     self.slowval.update()
-    self.beta.write(jnp.clip(self.tau.read(), 1e-6, 1000))
+    self.beta.write(jnp.clip(self.beta.read(), 1e-6, 1000))
 
     outs = {}
     if self.config.replay_context:
