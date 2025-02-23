@@ -143,7 +143,7 @@ class Agent(embodied.jax.Agent):
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
     self.slowval.update()
-    self.beta.write(jnp.clip(self.beta.read(), 0, 1000))
+    self.beta.write(jnp.clip(self.tau.read(), 1e-6, 1000))
 
     outs = {}
     if self.config.replay_context:
@@ -421,8 +421,8 @@ def imag_loss(
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
       logpi * sg(adv_normed) + actent * sg(beta) * sum(ents.values()))
-
   beta_loss = sg(weight[:, :-1]) * (sg(adv_normed) * (beta ** 2) / 2 + actent * beta * sg(sum(ents.values())))
+  # beta_loss = sg(weight[:, :-1]) * (sg(adv_normed) * jnp.log(beta) + actent * beta * sg(sum(ents.values())))
   losses['policy'] = policy_loss
   losses['beta'] = beta_loss
 
