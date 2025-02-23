@@ -509,4 +509,4 @@ def lambda_return(last, term, rew, val, boot, beta, disc, lam):
   interm = beta * rew[:, 1:] + (1 - cont) * live * jnp.log(1e-15 + jax.nn.relu(boot[:, 1:]))
   for t in reversed(range(live.shape[1])):
     rets.append(jnp.exp(interm[:, t] + live[:, t] * cont[:, t] * jnp.log(1e-15 + jax.nn.relu(rets[-1]))))
-  return beta * jnp.stack(list(reversed(rets))[:-1], 1)
+  return jnp.stack(list(reversed(rets))[:-1], 1)
