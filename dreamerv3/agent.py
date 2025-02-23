@@ -478,7 +478,7 @@ def repl_loss(
   tarval = slowval if slowtar else val
   disc = 1 - 1 / horizon
   weight = f32(~last)
-  ret = lambda_return(last, term, rew, tarval, boot, disc, lam, beta)
+  ret = lambda_return(last, term, rew, tarval, boot, beta, disc, lam)
 
   voffset, vscale = valnorm(ret, update)
   ret_normed = (ret - voffset) / vscale
