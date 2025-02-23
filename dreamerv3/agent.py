@@ -67,7 +67,7 @@ class Agent(embodied.jax.Agent):
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
     
-    self.beta = nj.Variable(jnp.array, 1.0, f32, name='beta')
+    self.beta = nj.Variable(jnp.array, 1, f32, name='beta')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
@@ -143,7 +143,7 @@ class Agent(embodied.jax.Agent):
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
     self.slowval.update()
-    self.beta.write(jnp.clip(self.tau.read(), 1e-6, 1000))
+    self.beta.write(jnp.clip(self.beta.read(), 0, 1000))
 
     outs = {}
     if self.config.replay_context:
@@ -420,13 +420,10 @@ def imag_loss(
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
   policy_loss = sg(weight[:, :-1]) * -(
-      logpi * sg(adv_normed) + actent * sum(ents.values()))
-  losses['policy'] = policy_loss
+      logpi * sg(adv_normed) + actent * sg(beta) * sum(ents.values()))
 
-  ret = lambda_return(sg(last), sg(term), sg(rew), sg(tarval), sg(tarval), disc, lam, beta)
-  adv = (ret - sg(tarval[:, :-1])) / rscale
-  adv_normed = (adv - aoffset) / ascale
-  beta_loss = sg(weight[:, :-1]) * (adv_normed + actent * beta * sg(sum(ents.values())))
+  beta_loss = sg(weight[:, :-1]) * (sg(adv_normed) * (beta ** 2) / 2 + actent * beta * sg(sum(ents.values())))
+  losses['policy'] = policy_loss
   losses['beta'] = beta_loss
 
   voffset, vscale = valnorm(ret, update)
@@ -490,27 +487,26 @@ def repl_loss(
       value.loss(sg(ret_padded)) +
       slowreg * value.loss(sg(slowvalue.pred())))[:, :-1]
   
-  soffset, sscale = srpnorm(surprise, update)
-  srp_normed = (surprise - soffset) / sscale
-  losses['beta'] = beta * (srp_normed - 0.1)
+  # soffset, sscale = srpnorm(surprise, update)
+  # srp_normed = (surprise - soffset) / sscale
+  # losses['beta'] = sg(beta) * (srp_normed - 0.1)
 
   outs = {}
   outs['ret'] = ret
   metrics = {}
-  metrics['beta'] = beta
-  metrics['srp'] = srp_normed.mean()
-  metrics['srp_min'] = srp_normed.min()
-  metrics['srp_max'] = srp_normed.max()
+  # metrics['beta'] = beta
+  # metrics['srp'] = srp_normed.mean()
+  # metrics['srp_min'] = srp_normed.min()
+  # metrics['srp_max'] = srp_normed.max()
 
   return losses, outs, metrics
 
 def lambda_return(last, term, rew, val, boot, beta, disc, lam):
   chex.assert_equal_shape((last, term, rew, val, boot))
-  # jax.debug.print('{}', beta)
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
   cont = (1 - f32(last))[:, 1:] * lam
   interm = beta * rew[:, 1:] + (1 - cont) * live * jnp.log(1e-15 + jax.nn.relu(boot[:, 1:]))
   for t in reversed(range(live.shape[1])):
     rets.append(jnp.exp(interm[:, t] + live[:, t] * cont[:, t] * jnp.log(1e-15 + jax.nn.relu(rets[-1]))))
-  return jnp.stack(list(reversed(rets))[:-1], 1)
+  return beta * jnp.stack(list(reversed(rets))[:-1], 1)
