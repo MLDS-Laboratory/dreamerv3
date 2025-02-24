@@ -414,20 +414,26 @@ def imag_loss(
 
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
-  ret = lambda_return(last, term, rmean, rvar, tarval, tarval, sum(ents.values()), tau, disc, lam)
+  ret = lambda_return(last, term, rmean, rvar, tarval, tarval, logpi, tau, disc, lam)
   roffset, rscale = retnorm(ret, update)
   adv = (ret - tarval[:, :-1]) / rscale
   aoffset, ascale = advnorm(adv, update)
   adv_normed = (adv - aoffset) / ascale
   
   policy_loss = sg(weight[:, :-1]) * -(
-      logpi * sg(adv_normed) + sg(tau) * sum(ents.values()))
-  tau_loss = sg(weight[:, :-1]) * (sg(rvar[:, :-1]) / (2 * tau) + tau * sg(sum(ents.values())))
+      logpi * sg(adv_normed) + actent * sg(tau) * sum(ents.values()))
+  # tau_loss = sg(weight[:, :-1]) * (sg(rvar[:, :-1]) / (2 * tau) + actent * tau * sg(sum(ents.values())))
+
+  ret = lambda_return(sg(last), sg(term), sg(rmean), sg(rvar), sg(tarval), sg(tarval), sg(logpi), tau, disc, lam)
+  adv = (ret - sg(tarval[:, :-1])) / rscale
+  adv_normed = (adv - aoffset) / ascale
+  tau_loss = sg(weight[:, :-1]) * (adv_normed + actent * tau * sg(sum(ents.values())))
 
   losses['policy'] = policy_loss
   losses['tau'] = tau_loss
 
-  tar = ret + tau * sum(ents.values())
+  # J(s) = K(s, a) - tau * log(pi(s, a))
+  tar = ret - tau * logpi
   voffset, vscale = valnorm(tar, update)
   tar_normed = (tar - voffset) / vscale
   tar_padded = jnp.concatenate([tar_normed, 0 * tar_normed[:, -1:]], 1)
@@ -500,12 +506,13 @@ def repl_loss(
   return losses, outs, metrics
 
 
-def lambda_return(last, term, rmean, rvar, val, boot, ents, tau, disc, lam):
+def lambda_return(last, term, rmean, rvar, val, boot, logpi, tau, disc, lam):
   chex.assert_equal_shape((last, term, rmean, rvar, val, boot))
   rets = [boot[:, -1]]
   live = (1 - f32(term))[:, 1:] * disc
   cont = (1 - f32(last))[:, 1:] * lam
   interm = rmean[:, 1:] + rvar[:, 1:] / (2 * tau) + (1 - cont) * live * boot[:, 1:]
   for t in reversed(range(live.shape[1])):
-    rets.append(interm[:, t] + live[:, t] * cont[:, t] * (rets[-1] + tau * ents[:, t]))
+    # r_l + gamma * (1 - lambda) * J(s') + gamma * lambda * (K(s', a') - tau * log(pi(s, a)))
+    rets.append(interm[:, t] + live[:, t] * cont[:, t] * (rets[-1] - tau * logpi[:, t]))
   return jnp.stack(list(reversed(rets))[:-1], 1)
