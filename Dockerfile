@@ -68,6 +68,13 @@ ENV WANDB_PROJECT=surprise-k-dreamer
 #             "--agent.risk_beta", "-0.01", \
 #             "--logger.outputs", "wandb"]
 
+# Acrobot
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "./logdir/gym_Acrobot-v1", \
+            "--configs", "gym", \ 
+            "--task", "gym_Acrobot-v1", \
+            "--logger.outputs", "wandb"]
 
 # # CartPole
 # ENTRYPOINT ["python", \
