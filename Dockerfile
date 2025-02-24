@@ -62,17 +62,16 @@ ENV WANDB_PROJECT=k-dreamer
 # # NovGrid
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/novgrid_custom_cart_pole/BETAN0010", \
+#             "--logdir", "k-dreamer/novgrid_custom_cart_pole", \
 #             "--configs", "novgrid", \ 
 #             "--task", "novgrid_custom_cart_pole", \
-#             "--agent.risk_beta", "-0.01", \
 #             "--logger.outputs", "wandb"]
 
 
 # Acrobot
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "./logdir/gym_Acrobot-v1", \
+            "--logdir", "k-dreamer/gym_Acrobot-v1", \
             "--configs", "gym", \ 
             "--task", "gym_Acrobot-v1", \
             "--logger.outputs", "wandb"]
@@ -97,8 +96,7 @@ ENTRYPOINT ["python", \
 # # Walker
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/dmc_walker_walk/BETAN0010", \
+#             "--logdir", "k-dreamer/dmc_walker_walk", \
 #             "--configs", "dmc_proprio", \ 
 #             "--task", "dmc_walker_walk", \
-#             "--agent.risk_beta", "-0.01", \
 #             "--logger.outputs", "wandb"]
