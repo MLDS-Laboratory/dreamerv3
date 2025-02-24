@@ -57,7 +57,7 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT=surprise-k-dreamer
+ENV WANDB_PROJECT=k-dreamer
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -71,7 +71,7 @@ ENV WANDB_PROJECT=surprise-k-dreamer
 # Acrobot
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "./logdir/gym_Acrobot-v1", \
+            "--logdir", "dreamer/gym_Acrobot-v1", \
             "--configs", "gym", \ 
             "--task", "gym_Acrobot-v1", \
             "--logger.outputs", "wandb"]
@@ -94,10 +94,10 @@ ENTRYPOINT ["python", \
 #             "--logger.outputs", "wandb"]
 
   
-# Walker
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "./logdir/vanilla/dmc_walker_walk", \
-            "--configs", "dmc_proprio", \ 
-            "--task", "dmc_walker_walk", \
-            "--logger.outputs", "wandb"]
+# # Walker
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "./logdir/vanilla/dmc_walker_walk", \
+#             "--configs", "dmc_proprio", \ 
+#             "--task", "dmc_walker_walk", \
+#             "--logger.outputs", "wandb"]
