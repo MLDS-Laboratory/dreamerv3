@@ -62,10 +62,10 @@ ENV WANDB_PROJECT="fixed-beta-dreamer"
 # NovGrid
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "fixed-beta-dreamer/novgrid_custom_cart_pole/BETAN0010", \
+            "--logdir", "fixed-beta-dreamer/novgrid_custom_cart_pole/N0010", \
             "--configs", "novgrid", \ 
             "--task", "novgrid_custom_cart_pole", \
-            "--agent.beta", "-0.001", \
+            "--agent.beta", "-0.01", \
             "--logger.outputs", "wandb"]
 
 
