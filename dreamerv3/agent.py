@@ -230,7 +230,7 @@ class Agent(embodied.jax.Agent):
           lambda x: x[:, -K:], (feat, last, term, rew, boot))
       inp = self.feat2tensor(feat)
       los, reploss_out, mets = repl_loss(
-          last, term, rew, boot,
+          prevact, last, term, rew, boot,
           self.rew(inp, 2).var(),
           self.pol(inp, 2),
           self.val(inp, 2),
@@ -471,8 +471,9 @@ def imag_loss(
 
 
 def repl_loss(
-    last, term, rmean, boot, rvar,
-    policy, value, slowvalue, tau, valnorm,
+    act, last, term, rmean, boot, rvar,
+    policy, value, slowvalue, tau, 
+    valnorm,
     update=True,
     slowreg=1.0,
     slowtar=True,
@@ -488,10 +489,10 @@ def repl_loss(
   disc = 1 - 1 / horizon
   weight = f32(~last)
 
-  ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
-  ret = lambda_return(last, term, rmean, rvar, tarval, boot, sum(ents.values()), tau, disc, lam)
+  logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
+  ret = lambda_return(last, term, rmean, rvar, tarval, boot, logpi, tau, disc, lam)
   
-  ret = ret + tau * sum(ents.values())
+  ret = ret - tau * logpi
   voffset, vscale = valnorm(ret, update)
   ret_normed = (ret - voffset) / vscale
   ret_padded = jnp.concatenate([ret_normed, 0 * ret_normed[:, -1:]], 1)
