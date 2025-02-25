@@ -59,22 +59,22 @@ ENV JAX_TRACEBACK_FILTERING=off
 # Wandb
 ENV WANDB_PROJECT=k-dreamer
 
-# # NovGrid
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "k-dreamer/novgrid_custom_cart_pole", \
-#             "--configs", "novgrid", \ 
-#             "--task", "novgrid_custom_cart_pole", \
-#             "--logger.outputs", "wandb"]
-
-
-# Acrobot
+# NovGrid
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "k-dreamer/gym_Acrobot-v1", \
-            "--configs", "gym", \ 
-            "--task", "gym_Acrobot-v1", \
+            "--logdir", "k-dreamer/novgrid_custom_cart_pole", \
+            "--configs", "novgrid", \ 
+            "--task", "novgrid_custom_cart_pole", \
             "--logger.outputs", "wandb"]
+
+
+# # Acrobot
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "k-dreamer/gym_Acrobot-v1", \
+#             "--configs", "gym", \ 
+#             "--task", "gym_Acrobot-v1", \
+#             "--logger.outputs", "wandb"]
 
 # # CartPole
 # ENTRYPOINT ["python", \
