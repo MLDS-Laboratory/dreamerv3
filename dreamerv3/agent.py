@@ -416,8 +416,7 @@ def imag_loss(
   adv_normed = (adv - aoffset) / ascale
   logpi = sum([v.logp(sg(act[k]))[:, :-1] for k, v in policy.items()])
   ents = {k: v.entropy()[:, :-1] for k, v in policy.items()}
-  policy_loss = sg(weight[:, :-1]) * -(
-      logpi * jnp.sign(beta) * sg(adv_normed) + actent * sum(ents.values()))
+  policy_loss = sg(weight[:, :-1]) * -(logpi * jnp.sign(beta) * sg(adv_normed))
 
   losses['policy'] = policy_loss
 

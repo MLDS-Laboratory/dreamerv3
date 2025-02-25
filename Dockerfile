@@ -59,14 +59,14 @@ ENV JAX_TRACEBACK_FILTERING=off
 # Wandb
 ENV WANDB_PROJECT="fixed-beta-dreamer"
 
-# NovGrid
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "fixed-beta-dreamer/novgrid_custom_cart_pole/N0010", \
-            "--configs", "novgrid", \ 
-            "--task", "novgrid_custom_cart_pole", \
-            "--agent.beta", "-0.01", \
-            "--logger.outputs", "wandb"]
+# # NovGrid
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "fixed-beta-dreamer/novgrid_custom_cart_pole/N0001", \
+#             "--configs", "novgrid", \ 
+#             "--task", "novgrid_custom_cart_pole", \
+#             "--agent.beta", "-0.001", \
+#             "--logger.outputs", "wandb"]
 
 
 # # CartPole
@@ -80,20 +80,21 @@ ENTRYPOINT ["python", \
 
 
 
-# # CartPole DMC
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/dmc_cartpole_balance/BETAN0010", \
-#             "--configs", "dmc_proprio", \ 
-#             "--task", "dmc_cartpole_balance", \
-#             "--agent.risk_beta", "-0.01", \
-#             "--logger.outputs", "wandb"]
+# CartPole DMC
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "fixed-beta-dreamer/dmc_cartpole_balance/N0001", \
+            "--configs", "dmc_proprio", \ 
+            "--task", "dmc_cartpole_balance", \
+            "--agent.beta", "-0.001", \
+            "--logger.outputs", "wandb"]
 
   
 # # Walker
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "beta-dreamer/dmc_walker_walk", \
+#             "--logdir", "fixed-beta-dreamer/dmc_walker_walk/N0001", \
 #             "--configs", "dmc_proprio", \ 
 #             "--task", "dmc_walker_walk", \
+#             "--agent.beta", "-0.001", \
 #             "--logger.outputs", "wandb"]
