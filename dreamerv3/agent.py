@@ -66,8 +66,6 @@ class Agent(embodied.jax.Agent):
     self.slowval = embodied.jax.SlowModel(
         embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
         source=self.val, **config.slowvalue)
-    
-    self.beta = nj.Variable(jnp.array, -0.001, f32, name='beta')
 
     self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
     self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
@@ -83,6 +81,8 @@ class Agent(embodied.jax.Agent):
     rec = scales.pop('rec')
     scales.update({k: rec for k in dec_space})
     self.scales = scales
+
+    self.beta = self.config.beta
 
   @property
   def policy_keys(self):
@@ -142,7 +142,6 @@ class Agent(embodied.jax.Agent):
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
     self.slowval.update()
-    # self.beta.write(jnp.clip(self.beta.read(), 1e-6, 1000))
 
     outs = {}
     if self.config.replay_context:
@@ -211,7 +210,7 @@ class Agent(embodied.jax.Agent):
         self.pol(inp, 2),
         self.val(inp, 2),
         self.slowval(inp, 2),
-        self.beta.read(),
+        self.beta,
         self.retnorm, self.valnorm, self.advnorm,
         update=training,
         contdisc=self.config.contdisc,
@@ -233,7 +232,7 @@ class Agent(embodied.jax.Agent):
           last, term, rew, boot, surprise,
           self.val(inp, 2),
           self.slowval(inp, 2),
-          self.beta.read(),
+          self.beta,
           self.valnorm,
           update=training,
           horizon=self.config.horizon,

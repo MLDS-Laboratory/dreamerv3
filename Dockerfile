@@ -57,26 +57,26 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT="beta-dreamer"
+ENV WANDB_PROJECT="fixed-beta-dreamer"
 
-# # NovGrid
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/novgrid_custom_cart_pole/BETAN0010", \
-#             "--configs", "novgrid", \ 
-#             "--task", "novgrid_custom_cart_pole", \
-#             "--agent.risk_beta", "-0.01", \
-#             "--logger.outputs", "wandb"]
-
-
-# CartPole
+# NovGrid
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "beta-dreamer/gym_CartPole-v1", \
-            "--configs", "gym", \ 
-            "--task", "gym_CartPole-v1", \
+            "--logdir", "fixed-beta-dreamer/novgrid_custom_cart_pole/BETAN0010", \
+            "--configs", "novgrid", \ 
+            "--task", "novgrid_custom_cart_pole", \
+            "--agent.beta", "-0.001", \
             "--logger.outputs", "wandb"]
-            # "--jax.platform", "cpu"]
+
+
+# # CartPole
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "beta-dreamer/gym_CartPole-v1", \
+#             "--configs", "gym", \ 
+#             "--task", "gym_CartPole-v1", \
+#             "--logger.outputs", "wandb"]
+#             # "--jax.platform", "cpu"]
 
 
 
