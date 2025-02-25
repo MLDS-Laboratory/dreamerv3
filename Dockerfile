@@ -57,55 +57,45 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT=k-dreamer
+ENV WANDB_PROJECT=fixed-beta-dreamer
 
 # # NovGrid
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/novgrid_custom_cart_pole/BETAN0010", \
+#             "--logdir", "dreamer/novgrid_custom_cart_pole", \
 #             "--configs", "novgrid", \ 
 #             "--task", "novgrid_custom_cart_pole", \
-#             "--agent.risk_beta", "-0.01", \
 #             "--logger.outputs", "wandb"]
 
-# Acrobot
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "dreamer/gym_Acrobot-v1", \
-            "--configs", "gym", \ 
-<<<<<<< HEAD
-            "--task", "gym_Acrobot-v1", \
-            "--logger.outputs", "wandb"]
+# # Acrobot
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "dreamer/gym_Acrobot-v1", \
+#             "--configs", "gym", \ 
+#             "--task", "gym_Acrobot-v1", \
+#             "--logger.outputs", "wandb"]
 
 # # CartPole
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/rs/gym_CartPole-v1", \
+#             "--logdir", "dreamer/rs/gym_CartPole-v1", \
 #             "--configs", "gym", \ 
 #             "--task", "gym_CartPole-v1", \
 #             "--logger.outputs", "wandb"]
-=======
-            "--task", "gym_CartPole-v1", \
+
+# CartPole DMC
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "dreamer/dmc_cartpole_balance", \
+            "--configs", "dmc_proprio", \ 
+            "--task", "dmc_cartpole_balance", \
             "--logger.outputs", "wandb"]
-            # "--jax.platform", "cpu"]
-
-
->>>>>>> 83a6c93 (Update)
-
-# # CartPole DMC
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/dmc_cartpole_balance/BETAN0010", \
-#             "--configs", "dmc_proprio", \ 
-#             "--task", "dmc_cartpole_balance", \
-#             "--agent.risk_beta", "-0.01", \
-#             "--logger.outputs", "wandb"]
 
   
 # # Walker
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "./logdir/vanilla/dmc_walker_walk", \
+#             "--logdir", "dreamer/vanilla/dmc_walker_walk", \
 #             "--configs", "dmc_proprio", \ 
 #             "--task", "dmc_walker_walk", \
 #             "--logger.outputs", "wandb"]
