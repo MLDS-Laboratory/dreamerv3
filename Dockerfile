@@ -80,9 +80,9 @@ ENV WANDB_PROJECT=astro-dreamer
 # NovGrid
 ENTRYPOINT ["python", \
             "dreamerv3/main.py", \ 
-            "--logdir", "dreamer/novgrid_orbit_discovery", \
+            "--logdir", "dreamer/novgrid_orbit_discovery_radius", \
             "--configs", "novgrid", \ 
-            "--task", "novgrid_orbit_discovery", \
+            "--task", "novgrid_orbit_discovery_radius", \
             "--logger.outputs", "wandb"]
 
 # # Orbit Discovery

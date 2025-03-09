@@ -44,7 +44,7 @@ env_configs = {
     {"env_id": "CustomCartPole-v0", "length": 0.5},
     {"env_id": "CustomCartPole-v0", "length": 1},
   ],
-  'orbit_discovery': [
+  'orbit_discovery_mu': [
     {
       "env_id": "OrbitDiscovery3DOF-v0",
       "mu": 2.463e5,
@@ -54,6 +54,18 @@ env_configs = {
       "env_id": "OrbitDiscovery3DOF-v0",
       "mu": 4.463e5,
       "radius": 8000
+    },
+  ],
+  'orbit_discovery_radius': [
+    {
+      "env_id": "OrbitDiscovery3DOF-v0",
+      "mu": 4.463e5,
+      "radius": 8000
+    },
+    {
+      "env_id": "OrbitDiscovery3DOF-v0",
+      "mu": 4.463e5,
+      "radius": 16000
     },
   ]
 }
