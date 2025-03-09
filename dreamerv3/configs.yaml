@@ -108,16 +108,13 @@ defaults:
     contdisc: True
     imag_loss: {slowtar: False, lam: 0.95, actent: 3e-4, slowreg: 1.0}
     repl_loss: {slowtar: False, lam: 0.95, slowreg: 1.0}
-    risk_loss: {slowtar: False, lam: 0.95}
     slowvalue: {rate: 0.02, every: 1}
-    slowrisk: {rate: 0.001, every: 1}
     retnorm: {impl: perc, rate: 0.01, limit: 1.0, perclo: 5.0, perchi: 95.0, debias: False}
     valnorm: {impl: none, rate: 0.01, limit: 1e-8}
     advnorm: {impl: none, rate: 0.01, limit: 1e-8}
     srpnorm: {impl: none, rate: 0.01, limit: 1e-8}
     reward_grad: True
     repval_loss: True
-    reprisk_loss: True
     repval_grad: True
     report: True
     report_gradnorms: False
