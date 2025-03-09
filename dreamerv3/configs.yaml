@@ -193,9 +193,9 @@ gym:
 
 novgrid:
   <<: *size1m
-  task: novgrid_custom_cart_pole
-  env.novgrid.novelty_step: 5e4
-  run: {envs: 1, steps: 1e5, train_ratio: 1024}
+  task: novgrid_orbit_discovery
+  env.novgrid.novelty_step: 2e6
+  run: {envs: 1, steps: 4e6, train_ratio: 1024}
 
 dmc_vision:
   task: dmc_walker_walk

@@ -12,7 +12,7 @@ ENV PIP_NO_CACHE_DIR=1
 ENV PIP_ROOT_USER_ACTION=ignore
 RUN apt-get update && apt-get install -y \
   ffmpeg git vim curl software-properties-common grep \
-  libglew-dev x11-xserver-utils xvfb wget \
+  libglew-dev x11-xserver-utils xvfb wget swig \
   && apt-get clean
 
 # Python
@@ -34,6 +34,16 @@ RUN apt-get update && apt-get install -y openjdk-8-jdk && apt-get clean
 RUN pip install https://github.com/danijar/minerl/releases/download/v0.4.4-patched/minerl_mirror-0.4.4-cp311-cp311-linux_x86_64.whl
 # RUN pip install git+https://github.com/minerllabs/minerl@7f2a2cba6ca6
 RUN chown -R 1000:root /venv/lib/python3.11/site-packages/minerl
+
+# Setup Basilisk
+RUN git clone https://github.com/AVSLab/basilisk.git
+RUN pip install wheel 'conan'
+RUN pip install cmake
+RUN cd basilisk && (yes u | python ./conanfile.py) && cd ..
+# Install bsk-envs
+RUN git clone https://github.com/aarunsrinivas5/bsk-envs.git
+RUN cd bsk-envs && pip install -e .
+# Install NovGrid
 RUN git clone https://github.com/eilab-gt/NovGrid.git
 RUN cd NovGrid && pip install -e .
 # Requirements
@@ -57,7 +67,7 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT=fixed-beta-dreamer
+ENV WANDB_PROJECT=astro-dreamer
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -67,12 +77,20 @@ ENV WANDB_PROJECT=fixed-beta-dreamer
 #             "--task", "novgrid_custom_cart_pole", \
 #             "--logger.outputs", "wandb"]
 
-# # Acrobot
+# NovGrid
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "dreamer/novgrid_orbit_discovery", \
+            "--configs", "novgrid", \ 
+            "--task", "novgrid_orbit_discovery", \
+            "--logger.outputs", "wandb"]
+
+# # Orbit Discovery
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "dreamer/gym_Acrobot-v1", \
+#             "--logdir", "dreamer/gym_OrbitDiscovery3DOF-v0", \
 #             "--configs", "gym", \ 
-#             "--task", "gym_Acrobot-v1", \
+#             "--task", "gym_OrbitDiscovery3DOF-v0", \
 #             "--logger.outputs", "wandb"]
 
 # # CartPole
@@ -83,13 +101,13 @@ ENV WANDB_PROJECT=fixed-beta-dreamer
 #             "--task", "gym_CartPole-v1", \
 #             "--logger.outputs", "wandb"]
 
-# CartPole DMC
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "dreamer/dmc_cartpole_balance", \
-            "--configs", "dmc_proprio", \ 
-            "--task", "dmc_cartpole_balance", \
-            "--logger.outputs", "wandb"]
+# # CartPole DMC
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "dreamer/dmc_cartpole_balance", \
+#             "--configs", "dmc_proprio", \ 
+#             "--task", "dmc_cartpole_balance", \
+#             "--logger.outputs", "wandb"]
 
   
 # # Walker
