@@ -59,13 +59,13 @@ ENV JAX_TRACEBACK_FILTERING=off
 # Wandb
 ENV WANDB_PROJECT=k-dreamer
 
-# NovGrid
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "k-dreamer/novgrid_custom_cart_pole", \
-            "--configs", "novgrid", \ 
-            "--task", "novgrid_custom_cart_pole", \
-            "--logger.outputs", "wandb"]
+# # NovGrid
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "k-dreamer/novgrid_custom_cart_pole", \
+#             "--configs", "novgrid", \ 
+#             "--task", "novgrid_custom_cart_pole", \
+#             "--logger.outputs", "wandb"]
 
 
 # # Acrobot
@@ -84,13 +84,13 @@ ENTRYPOINT ["python", \
 #             "--task", "gym_CartPole-v1", \
 #             "--logger.outputs", "wandb"]
 
-# # CartPole DMC
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "k-dreamer/dmc_cartpole_balance", \
-#             "--configs", "dmc_proprio", \ 
-#             "--task", "dmc_cartpole_balance", \
-#             "--logger.outputs", "wandb"]
+# CartPole DMC
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "k-dreamer/dmc_cartpole_balance", \
+            "--configs", "dmc_proprio", \ 
+            "--task", "dmc_cartpole_balance", \
+            "--logger.outputs", "wandb"]
 
   
 # # Walker
