@@ -4,4 +4,4 @@
 docker build -t img .
 
 # Run the Docker container with the necessary arguments
-docker run --env-file .env --rm --gpus "device=2" img 
+docker run --env-file .env --rm --gpus '"device=1,2"' img 

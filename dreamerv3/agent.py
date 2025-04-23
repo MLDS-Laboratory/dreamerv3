@@ -441,6 +441,7 @@ def imag_loss(
   metrics['ret_min'] = ret_normed.min()
   metrics['ret_max'] = ret_normed.max()
   metrics['ret_rate'] = (jnp.abs(ret_normed) >= 1.0).mean()
+  metrics['beta'] = beta
   
   for k in act:
     metrics[f'ent/{k}'] = ents[k].mean()
@@ -488,11 +489,20 @@ def repl_loss(
 
 def lambda_return(last, term, rew, val, boot, beta, disc, lam):
   chex.assert_equal_shape((last, term, rew, val, boot))
-  rets = [boot[:, -1]]
-  live = (1 - f32(term))[:, 1:] * disc
-  cont = (1 - f32(last))[:, 1:] * lam
-  interm = beta * rew[:, 1:] + (1 - cont) * live * jnp.log(1e-15 + jax.nn.relu(boot[:, 1:]))
-  for t in reversed(range(live.shape[1])):
-    rets.append(jnp.exp(interm[:, t] + live[:, t] * cont[:, t] * jnp.log(1e-15 + jax.nn.relu(rets[-1]))))
-  return jnp.stack(list(reversed(rets))[:-1], 1)
+  if beta == 0:
+    rets = [boot[:, -1]]
+    live = (1 - f32(term))[:, 1:] * disc
+    cont = (1 - f32(last))[:, 1:] * lam
+    interm = rew[:, 1:] + (1 - cont) * live * boot[:, 1:]
+    for t in reversed(range(live.shape[1])):
+      rets.append(interm[:, t] + live[:, t] * cont[:, t] * rets[-1])
+    return jnp.stack(list(reversed(rets))[:-1], 1)
+  else:
+    rets = [boot[:, -1]]
+    live = (1 - f32(term))[:, 1:] * disc
+    cont = (1 - f32(last))[:, 1:] * lam
+    interm = beta * rew[:, 1:] + (1 - cont) * live * jnp.log(1e-15 + jax.nn.relu(boot[:, 1:]))
+    for t in reversed(range(live.shape[1])):
+      rets.append(jnp.exp(interm[:, t] + live[:, t] * cont[:, t] * jnp.log(1e-15 + jax.nn.relu(rets[-1]))))
+    return jnp.stack(list(reversed(rets))[:-1], 1)
 

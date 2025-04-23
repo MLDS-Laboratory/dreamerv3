@@ -12,7 +12,7 @@ ENV PIP_NO_CACHE_DIR=1
 ENV PIP_ROOT_USER_ACTION=ignore
 RUN apt-get update && apt-get install -y \
   ffmpeg git vim curl software-properties-common grep \
-  libglew-dev x11-xserver-utils xvfb wget \
+  libglew-dev x11-xserver-utils xvfb wget sysstat\
   && apt-get clean
 
 # Python
@@ -57,7 +57,9 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT="fixed-beta-dreamer"
+ENV WANDB_PROJECT="fb-dreamer"
+
+ENTRYPOINT ["bash", "experiment.sh"]
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -80,14 +82,14 @@ ENV WANDB_PROJECT="fixed-beta-dreamer"
 
 
 
-# CartPole DMC
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "fixed-beta-dreamer/dmc_cartpole_balance/N0001", \
-            "--configs", "dmc_proprio", \ 
-            "--task", "dmc_cartpole_balance", \
-            "--agent.beta", "-0.001", \
-            "--logger.outputs", "wandb"]
+# # CartPole DMC
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "fixed-beta-dreamer/dmc_cartpole_balance/N0001", \
+#             "--configs", "dmc_proprio", \ 
+#             "--task", "dmc_cartpole_balance", \
+#             "--agent.beta", "-0.001", \
+#             "--logger.outputs", "wandb"]
 
   
 # # Walker
