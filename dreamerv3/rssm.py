@@ -58,27 +58,28 @@ class RSSM(nj.Module):
     return jax.tree.map(
         lambda x: x[:, -nlast:].reshape((B * nlast, *x.shape[2:])), entries)
 
-  def observe(self, carry, tokens, action, reset, training, single=False):
+  def observe(self, carry, tokens, action, reset, training, single=False, mask_history=False, mask_obs=False):
     carry, tokens, action = nn.cast((carry, tokens, action))
     if single:
       carry, (entry, feat) = self._observe(
-          carry, tokens, action, reset, training)
+          carry, tokens, action, reset, training, mask_history, mask_obs)
       return carry, entry, feat
     else:
       unroll = jax.tree.leaves(tokens)[0].shape[1] if self.unroll else 1
       carry, (entries, feat) = nj.scan(
           lambda carry, inputs: self._observe(
-              carry, *inputs, training),
+              carry, *inputs, training, mask_history, mask_obs),
           carry, (tokens, action, reset), unroll=unroll, axis=1)
       return carry, entries, feat
 
-  def _observe(self, carry, tokens, action, reset, training):
+  def _observe(self, carry, tokens, action, reset, training, mask_history, mask_obs):
     deter, stoch, action = nn.mask(
         (carry['deter'], carry['stoch'], action), ~reset)
     action = nn.DictConcat(self.act_space, 1)(action)
     action = nn.mask(action, ~reset)
-    deter = self._core(deter, stoch, action)
+    deter = self._core(deter, stoch, action) if not mask_history else jnp.zeros_like(deter)
     tokens = tokens.reshape((*deter.shape[:-1], -1))
+    tokens = tokens if not mask_obs else jnp.zeros_like(tokens)
     x = tokens if self.absolute else jnp.concatenate([deter, tokens], -1)
     for i in range(self.obslayers):
       x = self.sub(f'obs{i}', nn.Linear, self.hidden, **self.kw)(x)
@@ -90,6 +91,22 @@ class RSSM(nj.Module):
     entry = dict(deter=deter, stoch=stoch)
     assert all(x.dtype == nn.COMPUTE_DTYPE for x in (deter, stoch, logit))
     return carry, (entry, feat)
+  
+  def novelty_bound(self, carry, tokens, action, reset, training, single=False):
+    _, _, feat = self.observe(carry, tokens, action, reset, training, single)
+    history = self._prior(feat['deter'])
+    full = feat['logit']
+    # empty = self._prior(jnp.zeros_like(feat['deter']))
+    first = self._dist(sg(full)).kl(self._dist(sg(history)))
+    # second = self._dist(sg(full)).kl(self._dist(sg(empty)))
+    _, _, feat = self.observe(carry, tokens, action, reset, training, single, mask_history=True, mask_obs=True)
+    empty = feat['logit']
+    second = self._dist(sg(full)).kl(self._dist(sg(empty)))
+    _, _, feat = self.observe(carry, tokens, action, reset, training, single, mask_history=True)
+    obs = feat['logit']
+    third = self._dist(sg(full)).kl(self._dist(sg(obs)))
+    result = (first <= second - third).astype(jnp.int32)
+    return result, (first, second, third)
 
   def imagine(self, carry, policy, length, training, single=False):
     if single:

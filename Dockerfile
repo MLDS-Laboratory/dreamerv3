@@ -57,9 +57,9 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT="fb-dreamer"
+ENV WANDB_PROJECT="switch-dreamer"
 
-ENTRYPOINT ["bash", "experiment.sh"]
+# ENTRYPOINT ["bash", "experiment.sh"]
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -70,6 +70,15 @@ ENTRYPOINT ["bash", "experiment.sh"]
 #             "--agent.beta", "-0.001", \
 #             "--logger.outputs", "wandb"]
 
+# CartPole DMC
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "switch-dreamer/0001", \
+            "--configs", "gym", \ 
+            "--task", "gym_Ant-v5", \
+            "--agent.alpha", "0.001", \
+            "--agent.beta", "-0.001", \
+            "--logger.outputs", "wandb"]
 
 # # CartPole
 # ENTRYPOINT ["python", \
@@ -85,9 +94,10 @@ ENTRYPOINT ["bash", "experiment.sh"]
 # # CartPole DMC
 # ENTRYPOINT ["python", \
 #             "dreamerv3/main.py", \ 
-#             "--logdir", "fixed-beta-dreamer/dmc_cartpole_balance/N0001", \
+#             "--logdir", "switch-dreamer/0001", \
 #             "--configs", "dmc_proprio", \ 
 #             "--task", "dmc_cartpole_balance", \
+#             "--agent.alpha", "0.001", \
 #             "--agent.beta", "-0.001", \
 #             "--logger.outputs", "wandb"]
 

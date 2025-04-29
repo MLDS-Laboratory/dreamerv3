@@ -9,6 +9,7 @@ import jax.numpy as jnp
 import ninjax as nj
 import numpy as np
 import optax
+import wandb
 
 from . import rssm
 
@@ -16,7 +17,7 @@ f32 = jnp.float32
 i32 = jnp.int32
 sg = lambda xs, skip=False: xs if skip else jax.lax.stop_gradient(xs)
 sample = lambda xs: jax.tree.map(lambda x: x.sample(nj.seed()), xs)
-prefix = lambda xs, p: {f'{p}/{k}': v for k, v in xs.items()}
+prefix = lambda xs, p, delim='/': {f'{p}{delim}{k}': v for k, v in xs.items()}
 concat = lambda xs, a: jax.tree.map(lambda *x: jnp.concatenate(x, a), *xs)
 isimage = lambda s: s.dtype == np.uint8 and len(s.shape) == 3
 
@@ -59,20 +60,31 @@ class Agent(embodied.jax.Agent):
 
     d1, d2 = config.policy_dist_disc, config.policy_dist_cont
     outs = {k: d1 if v.discrete else d2 for k, v in act_space.items()}
-    self.pol = embodied.jax.MLPHead(
-        act_space, outs, **config.policy, name='pol')
+    self.rspol = embodied.jax.MLPHead(
+        act_space, outs, **config.policy, name='rspol')
+    self.rapol = embodied.jax.MLPHead(
+        act_space, outs, **config.policy, name='rapol')
 
-    self.val = embodied.jax.MLPHead(scalar, **config.value, name='val')
-    self.slowval = embodied.jax.SlowModel(
-        embodied.jax.MLPHead(scalar, **config.value, name='slowval'),
-        source=self.val, **config.slowvalue)
+    self.rsval = embodied.jax.MLPHead(scalar, **config.value, name='rsval')
+    self.raval = embodied.jax.MLPHead(scalar, **config.value, name='raval')
+    self.rsslowval = embodied.jax.SlowModel(
+        embodied.jax.MLPHead(scalar, **config.value, name='slowrsval'),
+        source=self.rsval, **config.slowvalue)
+    self.raslowval = embodied.jax.SlowModel(
+        embodied.jax.MLPHead(scalar, **config.value, name='slowraval'),
+        source=self.raval, **config.slowvalue)
 
-    self.retnorm = embodied.jax.Normalize(**config.retnorm, name='retnorm')
-    self.valnorm = embodied.jax.Normalize(**config.valnorm, name='valnorm')
-    self.advnorm = embodied.jax.Normalize(**config.advnorm, name='advnorm')
+    self.rsretnorm = embodied.jax.Normalize(**config.retnorm, name='rsretnorm')
+    self.raretnorm = embodied.jax.Normalize(**config.retnorm, name='raretnorm')
+
+    self.rsvalnorm = embodied.jax.Normalize(**config.valnorm, name='rsvalnorm')
+    self.ravalnorm = embodied.jax.Normalize(**config.valnorm, name='ravalnorm')
+
+    self.rsadvnorm = embodied.jax.Normalize(**config.advnorm, name='rsadvnorm')
+    self.raadvnorm = embodied.jax.Normalize(**config.advnorm, name='raadvnorm')
 
     self.modules = [
-        self.dyn, self.enc, self.dec, self.rew, self.con, self.pol, self.val]
+        self.dyn, self.enc, self.dec, self.rew, self.con, self.rspol, self.rapol, self.rsval, self.raval]
     self.opt = embodied.jax.Optimizer(
         self.modules, self._make_opt(**config.opt), summary_depth=1,
         name='opt')
@@ -82,17 +94,22 @@ class Agent(embodied.jax.Agent):
     scales.update({k: rec for k in dec_space})
     self.scales = scales
 
+    self.alpha = self.config.alpha
     self.beta = self.config.beta
 
   @property
   def policy_keys(self):
-    return '^(enc|dyn|dec|pol)/'
+    return '^(enc|dyn|dec|rapol|rspol)/'
 
   @property
   def ext_space(self):
     spaces = {}
     spaces['consec'] = elements.Space(np.int32)
     spaces['stepid'] = elements.Space(np.uint8, 20)
+    spaces['novelty_bound'] = elements.Space(np.int32)
+    spaces['first'] = elements.Space(np.float32)
+    spaces['second'] = elements.Space(np.float32)
+    spaces['third'] = elements.Space(np.float32)
     if self.config.replay_context:
       spaces.update(elements.tree.flatdict(dict(
           enc=self.enc.entry_space,
@@ -121,15 +138,32 @@ class Agent(embodied.jax.Agent):
     enc_carry, enc_entry, tokens = self.enc(enc_carry, obs, reset, **kw)
     dyn_carry, dyn_entry, feat = self.dyn.observe(
         dyn_carry, tokens, prevact, reset, **kw)
+    novelty_bound, (first, second, third) = self.dyn.novelty_bound(
+        dyn_carry, tokens, prevact, reset, **kw)
+
     dec_entry = {}
     if dec_carry:
       dec_carry, dec_entry, recons = self.dec(dec_carry, feat, reset, **kw)
-    policy = self.pol(self.feat2tensor(feat), bdims=1)
-    act = sample(policy)
+
+    act = jax.lax.cond(
+      jnp.all(novelty_bound),
+      lambda _: sample(self.rspol(self.feat2tensor(feat), bdims=1)),
+      lambda _: sample(self.rapol(self.feat2tensor(feat), bdims=1)),
+      operand=None
+    )
+
+    # policy = self.rspol(self.feat2tensor(feat), bdims=1)
+    # act = sample(policy)
+
+    # policy = self.rapol(self.feat2tensor(feat), bdims=1)
+    # act = sample(policy)
+
     out = {}
     out['finite'] = elements.tree.flatdict(jax.tree.map(
         lambda x: jnp.isfinite(x).all(range(1, x.ndim)),
         dict(obs=obs, carry=carry, tokens=tokens, feat=feat, act=act)))
+    out.update(elements.tree.flatdict(dict(
+      novelty_bound=novelty_bound, first=first, second=second, third=third)))
     carry = (enc_carry, dyn_carry, dec_carry, act)
     if self.config.replay_context:
       out.update(elements.tree.flatdict(dict(
@@ -141,7 +175,8 @@ class Agent(embodied.jax.Agent):
     metrics, (carry, entries, outs, mets) = self.opt(
         self.loss, carry, obs, prevact, training=True, has_aux=True)
     metrics.update(mets)
-    self.slowval.update()
+    self.rsslowval.update()
+    self.raslowval.update()
 
     outs = {}
     if self.config.replay_context:
@@ -192,12 +227,14 @@ class Agent(embodied.jax.Agent):
     K = min(self.config.imag_last or T, T)
     H = self.config.imag_length
     starts = self.dyn.starts(dyn_entries, dyn_carry, K)
-    policyfn = lambda feat: sample(self.pol(self.feat2tensor(feat), 1))
-    _, imgfeat, imgprevact = self.dyn.imagine(starts, policyfn, H, training)
+    rspolicyfn = lambda feat: sample(self.rspol(self.feat2tensor(feat), 1))
+    rapolicyfn = lambda feat: sample(self.rapol(self.feat2tensor(feat), 1))
+    
+    _, imgfeat, imgprevact = self.dyn.imagine(starts, rspolicyfn, H, training)
     first = jax.tree.map(
         lambda x: x[:, -K:].reshape((B * K, 1, *x.shape[2:])), repfeat)
     imgfeat = concat([sg(first, skip=self.config.ac_grads), sg(imgfeat)], 1)
-    lastact = policyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
+    lastact = rspolicyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
     lastact = jax.tree.map(lambda x: x[:, None], lastact)
     imgact = concat([imgprevact, lastact], 1)
     assert all(x.shape[:2] == (B * K, H + 1) for x in jax.tree.leaves(imgfeat))
@@ -207,21 +244,20 @@ class Agent(embodied.jax.Agent):
         imgact,
         self.rew(inp, 2).pred(),
         self.con(inp, 2).prob(1),
-        self.pol(inp, 2),
-        self.val(inp, 2),
-        self.slowval(inp, 2),
-        self.beta,
-        self.retnorm, self.valnorm, self.advnorm,
+        self.rspol(inp, 2),
+        self.rsval(inp, 2),
+        self.rsslowval(inp, 2),
+        self.alpha,
+        self.rsretnorm, self.rsvalnorm, self.rsadvnorm,
         update=training,
         contdisc=self.config.contdisc,
         horizon=self.config.horizon,
         **self.config.imag_loss)
-    losses.update({k: v.mean(1).reshape((B, K)) for k, v in los.items()})
-    metrics.update(mets)
+    losses.update(prefix({k: v.mean(1).reshape((B, K)) for k, v in los.items()}, 'alpha', '_'))
+    metrics.update(prefix(mets, 'alpha', '_'))
+    metrics['alpha'] = self.alpha
 
-    # Replay
     if self.config.repval_loss:
-      surprise = losses['dyn']
       feat = sg(repfeat, skip=self.config.repval_grad)
       last, term, rew = [obs[k] for k in ('is_last', 'is_terminal', 'reward')]
       boot = imgloss_out['ret'][:, 0].reshape(B, K)
@@ -229,16 +265,63 @@ class Agent(embodied.jax.Agent):
           lambda x: x[:, -K:], (feat, last, term, rew, boot))
       inp = self.feat2tensor(feat)
       los, reploss_out, mets = repl_loss(
-          last, term, rew, boot, surprise,
-          self.val(inp, 2),
-          self.slowval(inp, 2),
-          self.beta,
-          self.valnorm,
+          last, term, rew, boot,
+          self.rsval(inp, 2),
+          self.rsslowval(inp, 2),
+          self.alpha,
+          self.rsvalnorm,
           update=training,
           horizon=self.config.horizon,
           **self.config.repl_loss)
-      losses.update(los)
-      metrics.update(prefix(mets, 'reploss'))
+      losses.update(prefix(los, 'alpha', '_'))
+      metrics.update(prefix(mets, 'alpha_reploss'))
+
+    _, imgfeat, imgprevact = self.dyn.imagine(starts, rapolicyfn, H, training)
+    first = jax.tree.map(
+        lambda x: x[:, -K:].reshape((B * K, 1, *x.shape[2:])), repfeat)
+    imgfeat = concat([sg(first, skip=self.config.ac_grads), sg(imgfeat)], 1)
+    lastact = rapolicyfn(jax.tree.map(lambda x: x[:, -1], imgfeat))
+    lastact = jax.tree.map(lambda x: x[:, None], lastact)
+    imgact = concat([imgprevact, lastact], 1)
+    assert all(x.shape[:2] == (B * K, H + 1) for x in jax.tree.leaves(imgfeat))
+    assert all(x.shape[:2] == (B * K, H + 1) for x in jax.tree.leaves(imgact))
+    inp = self.feat2tensor(imgfeat)
+    los, imgloss_out, mets = imag_loss(
+        imgact,
+        self.rew(inp, 2).pred(),
+        self.con(inp, 2).prob(1),
+        self.rapol(inp, 2),
+        self.raval(inp, 2),
+        self.raslowval(inp, 2),
+        self.beta,
+        self.raretnorm, self.ravalnorm, self.raadvnorm,
+        update=training,
+        contdisc=self.config.contdisc,
+        horizon=self.config.horizon,
+        **self.config.imag_loss)
+    losses.update(prefix({k: v.mean(1).reshape((B, K)) for k, v in los.items()}, 'beta', '_'))
+    metrics.update(prefix(mets, 'beta', '_'))
+    metrics['beta'] = self.beta
+
+    # Replay
+    if self.config.repval_loss:
+      feat = sg(repfeat, skip=self.config.repval_grad)
+      last, term, rew = [obs[k] for k in ('is_last', 'is_terminal', 'reward')]
+      boot = imgloss_out['ret'][:, 0].reshape(B, K)
+      feat, last, term, rew, boot = jax.tree.map(
+          lambda x: x[:, -K:], (feat, last, term, rew, boot))
+      inp = self.feat2tensor(feat)
+      los, reploss_out, mets = repl_loss(
+          last, term, rew, boot,
+          self.raval(inp, 2),
+          self.raslowval(inp, 2),
+          self.beta,
+          self.ravalnorm,
+          update=training,
+          horizon=self.config.horizon,
+          **self.config.repl_loss)
+      losses.update(prefix(los, 'beta', '_'))
+      metrics.update(prefix(mets, 'beta_reploss'))
 
     assert set(losses.keys()) == set(self.scales.keys()), (
         sorted(losses.keys()), sorted(self.scales.keys()))
@@ -399,6 +482,7 @@ def imag_loss(
 ):
   losses = {}
   metrics = {}
+  prefix = 'alpha' if beta > 0 else 'beta'
 
   voffset, vscale = valnorm.stats()
   val = value.pred() * vscale + voffset
@@ -428,6 +512,7 @@ def imag_loss(
       slowreg * value.loss(sg(slowvalue.pred())))[:, :-1]
 
   ret_normed = (ret - roffset) / rscale
+
   metrics['adv'] = adv.mean()
   metrics['adv_std'] = adv.std()
   metrics['adv_mag'] = jnp.abs(adv).mean()
@@ -441,21 +526,21 @@ def imag_loss(
   metrics['ret_min'] = ret_normed.min()
   metrics['ret_max'] = ret_normed.max()
   metrics['ret_rate'] = (jnp.abs(ret_normed) >= 1.0).mean()
-  metrics['beta'] = beta
-  
+
   for k in act:
-    metrics[f'ent/{k}'] = ents[k].mean()
+    metrics['ent/{k}'] = ents[k].mean()
     if hasattr(policy[k], 'minent'):
       lo, hi = policy[k].minent, policy[k].maxent
-      metrics[f'rand/{k}'] = (ents[k].mean() - lo) / (hi - lo)
+      metrics['rand/{k}'] = (ents[k].mean() - lo) / (hi - lo)
 
   outs = {}
   outs['ret'] = ret
+
   return losses, outs, metrics
 
 
 def repl_loss(
-    last, term, rew, boot, surprise, 
+    last, term, rew, boot, 
     value, slowvalue, beta, 
     valnorm,
     update=True,
@@ -477,6 +562,7 @@ def repl_loss(
   voffset, vscale = valnorm(ret, update)
   ret_normed = (ret - voffset) / vscale
   ret_padded = jnp.concatenate([ret_normed, 0 * ret_normed[:, -1:]], 1)
+
   losses['repval'] = weight[:, :-1] * (
       value.loss(sg(ret_padded)) +
       slowreg * value.loss(sg(slowvalue.pred())))[:, :-1]

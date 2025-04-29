@@ -34,6 +34,10 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
     episode.add('score', tran['reward'], agg='sum')
     episode.add('length', 1, agg='sum')
     episode.add('rewards', tran['reward'], agg='stack')
+    episode.add('novelty_bound', tran['novelty_bound'], agg='avg')
+    episode.add('first', tran['first'], agg='avg')
+    episode.add('second', tran['second'], agg='avg')
+    episode.add('third', tran['third'], agg='avg')
     for key, value in tran.items():
       if value.dtype == np.uint8 and value.ndim == 3:
         if worker == 0:
@@ -48,6 +52,10 @@ def train(make_agent, make_replay, make_env, make_stream, make_logger, args):
       logger.add({
           'score': result.pop('score'),
           'length': result.pop('length'),
+          'novelty_bound': result.pop('novelty_bound'),
+          'first': result.pop('first'),
+          'second': result.pop('second'),
+          'third': result.pop('third')
       }, prefix='episode')
       rew = result.pop('rewards')
       if len(rew) > 1:
