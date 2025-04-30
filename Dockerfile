@@ -67,7 +67,7 @@ ENV GCS_WRITE_REQUEST_TIMEOUT_SECS=600
 ENV JAX_TRACEBACK_FILTERING=off
 
 # Wandb
-ENV WANDB_PROJECT=astro-dreamer
+ENV WANDB_PROJECT=switch-dreamer
 
 # # NovGrid
 # ENTRYPOINT ["python", \
@@ -78,12 +78,12 @@ ENV WANDB_PROJECT=astro-dreamer
 #             "--logger.outputs", "wandb"]
 
 # NovGrid
-ENTRYPOINT ["python", \
-            "dreamerv3/main.py", \ 
-            "--logdir", "dreamer/novgrid_orbit_discovery_radius", \
-            "--configs", "novgrid", \ 
-            "--task", "novgrid_orbit_discovery_radius", \
-            "--logger.outputs", "wandb"]
+# ENTRYPOINT ["python", \
+#             "dreamerv3/main.py", \ 
+#             "--logdir", "dreamer/novgrid_orbit_discovery_radius", \
+#             "--configs", "novgrid", \ 
+#             "--task", "novgrid_orbit_discovery_radius", \
+#             "--logger.outputs", "wandb"]
 
 # # Orbit Discovery
 # ENTRYPOINT ["python", \
@@ -93,13 +93,13 @@ ENTRYPOINT ["python", \
 #             "--task", "gym_OrbitDiscovery3DOF-v0", \
 #             "--logger.outputs", "wandb"]
 
-# # CartPole
-# ENTRYPOINT ["python", \
-#             "dreamerv3/main.py", \ 
-#             "--logdir", "dreamer/rs/gym_CartPole-v1", \
-#             "--configs", "gym", \ 
-#             "--task", "gym_CartPole-v1", \
-#             "--logger.outputs", "wandb"]
+# CartPole
+ENTRYPOINT ["python", \
+            "dreamerv3/main.py", \ 
+            "--logdir", "dreamer/gym_Swimmer-v5", \
+            "--configs", "gym", \ 
+            "--task", "gym_Swimmer-v5", \
+            "--logger.outputs", "wandb"]
 
 # # CartPole DMC
 # ENTRYPOINT ["python", \
